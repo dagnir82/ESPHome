@@ -299,7 +299,6 @@ speaker:
     channel: stereo
     timeout: never
     buffer_duration: 100ms
-    audio_dac: aic3204_dac
 
   # Virtual speakers to combine the announcement and media streams together into one output
   - platform: mixer
@@ -373,14 +372,6 @@ media_player:
       - id: error_cloud_expired
         file: https://github.com/esphome/home-assistant-voice-pe/raw/dev/sounds/error_cloud_expired.mp3
 
-voice_kit:
-  i2c_id: internal_i2c
-  reset_pin: GPIO4
-  firmware:
-    url: https://github.com/esphome/voice-kit-xmos-firmware/releases/download/v1.3.1/ffva_v1.3.1_upgrade.bin
-    version: "1.3.1"
-    md5: 964635c5bf125529dab14a2472a15401
-
 external_components:
   - source:
       type: git
@@ -389,15 +380,8 @@ external_components:
     components:
       - micro_wake_word
       - microphone
-      - nabu_microphone
       - voice_assistant
-      - voice_kit
     refresh: 0s
-
-audio_dac:
-  - platform: aic3204
-    id: aic3204_dac
-    i2c_id: internal_i2c
 
 micro_wake_word:
   id: mww

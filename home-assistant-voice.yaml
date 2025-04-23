@@ -20,7 +20,26 @@ esp32:
       CONFIG_BT_BLE_DYNAMIC_ENV_MEMORY: "y"
 
       CONFIG_MBEDTLS_EXTERNAL_MEM_ALLOC: "y"
-      CONFIG_MBEDTLS_SSL_PROTO_TLS1_3: "y"  # TLS1.3 support isn't enabled by default in IDF 5.1.5
+      CONFIG_MBEDTLS_SSL_PROTO_TLS1_3: "n"  # TLS1.3 support isn't enabled by default in IDF 5.1.5
+
+      # Enable TLS 1.2 (required for WPA Supplicant and ESP-TLS)
+      CONFIG_MBEDTLS_SSL_PROTO_TLS1_2: "y"
+
+      # Set both minimum and maximum TLS versions to 1.2 (forces only TLS 1.2)
+      CONFIG_MBEDTLS_SSL_MIN_MINOR_VERSION: "3"
+      CONFIG_MBEDTLS_SSL_MAX_MINOR_VERSION: "3"
+
+      # Disable TLS 1.3-specific extensions that may still be present in ClientHello
+      CONFIG_MBEDTLS_SSL_TLS1_3_KEY_SHARE: "n"              # Prevents sending key_share extension (TLS 1.3 key exchange)
+      CONFIG_MBEDTLS_SSL_TLS1_3_PSK_EXCHANGE: "n"           # Disables PSK key exchange modes for TLS 1.3
+
+      # Remove TLS 1.3 compatibility and mixed-mode features
+      CONFIG_MBEDTLS_SSL_TLS1_3_COMPATIBILITY_MODE: "n"     # Ensures no fallback to TLS 1.3 behavior
+      CONFIG_MBEDTLS_SSL_TLS1_3_MIXED_MODE: "n"             # Prevents using TLS 1.3 alongside older versions
+
+      # Fully disable additional TLS 1.3 features
+      CONFIG_MBEDTLS_SSL_TLS1_3_EARLY_DATA: "n"             # Disables 0-RTT early data (TLS 1.3 optimization)
+      CONFIG_MBEDTLS_SSL_TLS1_3_MIDDLEBOX_COMPAT: "n"       # Prevents middlebox compatibility mode (avoids sending unnecessary extensions)      
 
 # Enable logging
 logger:

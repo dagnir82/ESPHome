@@ -1,3 +1,21 @@
+substitutions:
+  # Phases of the Voice Assistant
+  # The voice assistant is ready to be triggered by a wake word
+  voice_assist_idle_phase_id: '1'
+  # The voice assistant is waiting for a voice command (after being triggered by the wake word)
+  voice_assist_waiting_for_command_phase_id: '2'
+  # The voice assistant is listening for a voice command
+  voice_assist_listening_for_command_phase_id: '3'
+  # The voice assistant is currently processing the command
+  voice_assist_thinking_phase_id: '4'
+  # The voice assistant is replying to the command
+  voice_assist_replying_phase_id: '5'
+  # The voice assistant is not ready
+  voice_assist_not_ready_phase_id: '10'
+  # The voice assistant encountered an error
+  voice_assist_error_phase_id: '11'
+  # Change this to true in case you ahve a hidden SSID at home.
+  hidden_ssid: "false"
 
 esphome:
   name: wireless-speaker
@@ -39,7 +57,7 @@ esp32:
 
       # Fully disable additional TLS 1.3 features
       CONFIG_MBEDTLS_SSL_TLS1_3_EARLY_DATA: "n"             # Disables 0-RTT early data (TLS 1.3 optimization)
-      CONFIG_MBEDTLS_SSL_TLS1_3_MIDDLEBOX_COMPAT: "n"       # Prevents middlebox compatibility mode (avoids sending unnecessary extensions)      
+      CONFIG_MBEDTLS_SSL_TLS1_3_MIDDLEBOX_COMPAT: "n"       # Prevents middlebox compatibility mode (avoids sending unnecessary extensions)
 
 # Enable logging
 logger:
@@ -51,6 +69,13 @@ logger:
 api:
   encryption:
     key: "PWu0w60y8CnZZRzCR2VXVyl98qyKW4fTPnHsyangNU4="
+  on_client_connected:
+        then:
+          - delay: 50ms
+          - micro_wake_word.start:
+  on_client_disconnected:
+        then:
+          - voice_assistant.stop: 
 
 ota:
   - platform: esphome
@@ -72,6 +97,26 @@ i2c:
     scl: GPIO6
     frequency: 400kHz
 
+globals:
+  # Global initialization variable. Initialized to true and set to false once everything is connected. Only used to have a smooth "plugging" experience
+  - id: init_in_progress
+    type: bool
+    restore_value: no
+    initial_value: 'true'
+  # Global variable tracking the phase of the voice assistant (defined above). Initialized to not_ready
+  - id: voice_assistant_phase
+    type: int
+    restore_value: no
+    initial_value: ${voice_assist_not_ready_phase_id}
+  # Global variable storing the first active timer
+  - id: first_active_timer
+    type: voice_assistant::Timer
+    restore_value: false
+  # Global variable storing if a timer is active
+  - id: is_timer_active
+    type: bool
+    restore_value: false
+
 psram:
   mode: octal
   speed: 80MHz
@@ -86,6 +131,7 @@ switch:
       - voice_assistant.stop:
     on_turn_off:
       - micro_wake_word.start:
+
 
 i2s_audio:
   - id: i2s_output
@@ -109,9 +155,7 @@ microphone:
     channel: left
     adc_type: external
     pdm: false
-    sample_rate: 16000
-    bits_per_sample: 16bit
-    i2s_mode: secondary
+    bits_per_sample: 32bit
     i2s_audio_id: i2s_input
 
 speaker:
@@ -184,21 +228,10 @@ media_player:
               id: media_mixing_input
               decibel_reduction: 0
               duration: 1.0s
-    files:
-      - id: timer_finished_sound
-        file: https://github.com/esphome/home-assistant-voice-pe/raw/dev/sounds/timer_finished.flac
-      - id: wake_word_triggered_sound
-        file: https://github.com/esphome/home-assistant-voice-pe/raw/dev/sounds/wake_word_triggered.flac
-      - id: easter_egg_tick_sound
-        file: https://github.com/esphome/home-assistant-voice-pe/raw/dev/sounds/easter_egg_tick.mp3
-      - id: easter_egg_tada_sound
-        file: https://github.com/esphome/home-assistant-voice-pe/raw/dev/sounds/easter_egg_tada.mp3
-      - id: error_cloud_expired
-        file: https://github.com/esphome/home-assistant-voice-pe/raw/dev/sounds/error_cloud_expired.mp3
 
 micro_wake_word:
+  id: mww
   on_wake_word_detected:
-    
     - voice_assistant.start:
         wake_word: !lambda return wake_word;
         silence_detection: true
@@ -208,18 +241,44 @@ micro_wake_word:
 voice_assistant:
   id: wireless_speaker_assistant
   microphone: mic
+  media_player: wireless_speaker_media_player
+  use_wake_word: false
   auto_gain: 31dBFS
   noise_suppression_level: 2
   volume_multiplier: 4.0
-  speaker: i2s_audio_speaker
   on_error:
-          - micro_wake_word.start:  
+    - micro_wake_word.start:  
+  on_start:
+    - mixer_speaker.apply_ducking:
+        id: media_mixing_input
+        decibel_reduction: 20  # Number of dB quieter; higher implies more quiet, 0 implies full volume
+        duration: 0.0s         # The duration of the transition (default is no transition)
+  on_listening:
+    - lambda: id(voice_assistant_phase) = ${voice_assist_waiting_for_command_phase_id};
+  on_stt_vad_start:
+    - lambda: id(voice_assistant_phase) = ${voice_assist_listening_for_command_phase_id};
+  on_stt_vad_end:
+    - lambda: id(voice_assistant_phase) = ${voice_assist_thinking_phase_id};
+  on_tts_start:
+    - lambda: id(voice_assistant_phase) = ${voice_assist_replying_phase_id};
+  # When the voice assistant ends ...
   on_end:
+    - wait_until:
+        not:
+          voice_assistant.is_running:
+    # Stop ducking audio.
+    - mixer_speaker.apply_ducking:
+        id: media_mixing_input
+        decibel_reduction: 0
+        duration: 1.0s
+    # If the end happened because of an error, let the error phase on for a second
+    - if:
+        condition:
+          lambda: return id(voice_assistant_phase) == ${voice_assist_error_phase_id};
         then:
-          - wait_until:
-              not:
-                voice_assistant.is_running:
-          - micro_wake_word.start:  
+          - delay: 1s
+    # Reset the voice assistant phase id and reset the LED animations.
+    - lambda: id(voice_assistant_phase) = ${voice_assist_idle_phase_id};
 
 button:
   - platform: factory_reset

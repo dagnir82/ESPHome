@@ -442,6 +442,7 @@ voice_assistant:
     - wait_until:
         not:
           voice_assistant.is_running:
+    - micro_wake_word.start:            
     # Stop ducking audio.
     - mixer_speaker.apply_ducking:
         id: media_mixing_input

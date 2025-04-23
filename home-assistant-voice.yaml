@@ -287,6 +287,8 @@ speaker:
     i2s_audio_id: i2s_output
     dac_type: external
     channel: stereo
+    timeout: never    
+    buffer_duration: 100ms
 
   # Virtual speakers to combine the announcement and media streams together into one output
   - platform: mixer
@@ -385,6 +387,7 @@ micro_wake_word:
                 switch.is_on: timer_ringing
               then:
                 - switch.turn_off: timer_ringing
+                - micro_wake_word.start:
               # Stop voice assistant if running
               else:
                 - if:

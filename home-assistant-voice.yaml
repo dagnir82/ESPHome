@@ -252,6 +252,15 @@ script:
           }
           id(is_timer_active) = output;
 
+sensor:
+  - platform: dht
+    pin: GPIO1
+    temperature:
+      name: "Kitchen Temperature"
+    humidity:
+      name: "Kitchen Humidity"
+    update_interval: 60s
+
 i2s_audio:
   - id: i2s_output
     # i2s_output data pin is gpio10
